@@ -1,5 +1,5 @@
 /* Allenamenti — service worker. Alza VERSION quando cambi i file. */
-const VERSION = 'allenamenti-v3';
+const VERSION = 'allenamenti-v4';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './assets/archivo-var.woff2', './assets/icon-192.png',
