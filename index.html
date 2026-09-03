@@ -36,7 +36,7 @@ html,body{scrollbar-width:none;-ms-overflow-style:none}
 body{color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
 /* l'app e' alta quanto lo schermo: la barra sta in fondo alla colonna, non e'
    agganciata al viewport, quindi non puo' piu' saltare quando cambi pagina */
-.app{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+.app{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;overflow:hidden}
 .scroller{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
 .wrap{max-width:520px;margin:0 auto;padding:0 18px}
 h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.02em}
@@ -121,8 +121,8 @@ header img{width:38px;height:32px;object-fit:contain;flex:none;opacity:.95}
 .row .s{display:block;font-size:12.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .row .r{font-size:11.5px;color:var(--fg3);text-align:right;flex:none;line-height:1.5}
 
-nav{flex:0 0 auto;background:var(--bg);border-top:1px solid var(--line);padding-bottom:max(6px,calc(env(safe-area-inset-bottom) - 13px));z-index:40}
-.navin{max-width:520px;margin:0 auto;display:flex;align-items:center;padding:5px 12px}
+nav{flex:0 0 auto;background:var(--bg);border-top:1px solid var(--line);padding-bottom:max(4px,calc(env(safe-area-inset-bottom) - 16px));z-index:40}
+.navin{max-width:520px;margin:0 auto;display:flex;align-items:center;padding:4px 12px}
 .tab{flex:1;text-align:center;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--fg3);padding:8px 0}
 .tab.on{color:var(--fg)}
 .fab{width:46px;height:46px;border-radius:50%;background:var(--acc);color:#fff;font-size:25px;display:flex;align-items:center;justify-content:center;padding-bottom:3px;flex:none;margin:0 8px;box-shadow:0 6px 18px -8px rgba(255,75,18,.9);transition:transform .12s}
@@ -147,6 +147,9 @@ input.in::-webkit-calendar-picker-indicator{opacity:.45}
 .in:focus{outline:none;border-color:var(--acc)}
 textarea.in{min-height:78px;resize:vertical;line-height:1.5}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dur{display:flex;align-items:center;gap:7px}
+.dur .in{text-align:center;padding-left:6px;padding-right:6px}
+.dur span{color:var(--fg3);font-size:17px;font-weight:700;flex:none}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .g2>*,.g3>*,.pick>*{min-width:0}
 .pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -308,15 +311,10 @@ const dec = v => (v===null||v===undefined||v==='') ? '' : String(v).replace('.',
 function pnum(v){ if(v===null||v===undefined) return null;
   const t=String(v).replace(',','.').replace(/[^0-9.]/g,'');
   if(t==='') return null; const n=parseFloat(t); return isFinite(n)?n:null; }
-/* durata: accetta 46, 46,5 oppure 46:24 */
-function pmin(v){ v=String(v).trim(); if(v==='') return null;
-  if(v.includes(':')){ const [a,b]=v.split(':'); const m=parseInt(a,10)||0, sec=parseInt(b,10)||0;
-    return Math.round((m+sec/60)*100)/100; }
-  return pnum(v); }
-function fmtMin(v){ if(v===null||v===undefined||v==='') return '';
-  const m=Math.floor(v), sec=Math.round((v-m)*60);
-  return sec? m+':'+String(sec).padStart(2,'0') : String(m); }
-function cleanTime(v){ return String(v).replace(/[^0-9:,.]/g,''); }
+/* durata tenuta in minuti decimali, scritta in due caselle */
+const durM = v => (v===null||v===undefined||v==='') ? '' : String(Math.floor(v));
+const durS = v => { if(v===null||v===undefined||v==='') return '';
+  const sec=Math.round((v-Math.floor(v))*60); return sec? String(sec) : ''; };
 function cleanDec(v){ v=String(v).replace(/[^0-9.,]/g,'');
   const i=v.search(/[.,]/); if(i>=0) v=v.slice(0,i+1)+v.slice(i+1).replace(/[.,]/g,''); return v; }
 function median(a){ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y); return s[Math.floor(s.length/2)]; }
@@ -331,12 +329,6 @@ function bmr(){
 }
 /* kcal al minuto stando fermi */
 const restKcalMin = () => profOk() ? bmr()/1440 : 3.5*(S.peso||75)/200;
-/* quanto sei sopra o sotto un impegno medio, letto dai battiti */
-function hrFactor(w){
-  if(!(w.fc>0 && S.eta>0)) return null;
-  const hrmax=208-0.7*S.eta;
-  return Math.min(1.45, Math.max(0.65, (w.fc/hrmax)/0.75));
-}
 function kcal(w){
   if(w.kcal) return w.kcal;
   const s=SP[w.sport]||SP.altro; let met=s.met;
@@ -344,10 +336,7 @@ function kcal(w){
     if(w.sport==='corsa') met=Math.max(4,0.98*kmh+0.35);
     else if(w.sport==='bici') met=Math.max(3,0.40*kmh);
     else if(w.sport==='camminata') met=Math.max(2.5,0.72*kmh+1.2); }
-  /* dove non c'e' una distanza da cui ricavare la velocita', i battiti dicono
-     piu' dell'intensita' scelta a mano */
-  const hf = (s.kind==='cardio' && w.km>0 && w.min>0) ? null : hrFactor(w);
-  if(hf) met*=hf; else if(w.rpe) met*=(0.865+w.rpe*0.045);
+  if(w.rpe) met*=(0.865+w.rpe*0.045);
   /* attive: quello che consumi in piu' rispetto a stare fermo, come su Fitness */
   return Math.round(Math.max(0,met-1)*restKcalMin()*(w.min||0));
 }
@@ -408,7 +397,7 @@ function sub(w){ const s=SP[w.sport]||SP.altro, p=[];
   if(w.min) p.push(hm(w.min)); if(w.km) p.push(nf(w.km,1)+' km');
   if(s.kind==='cardio'&&w.km&&w.min) p.push(pace(w.min,w.km)+'/km');
   const r=reps(w), sc=secs(w); if(r) p.push(r+' rip'); if(sc) p.push(sc+'″');
-  if(vol(w)) p.push(nf(vol(w))+' kg'); if(w.fc) p.push(w.fc+' bpm'); if(w.cad) p.push(w.cad+' spm'); if(w.disl) p.push('+'+w.disl+' m');
+  if(vol(w)) p.push(nf(vol(w))+' kg'); if(w.disl) p.push('+'+w.disl+' m');
   return p.join(' · '); }
 function exStats(){
   const m={};
@@ -650,7 +639,7 @@ function openSheet(h){ const sh=$('#sheet'); sh.style.bottom=''; sh.style.maxHei
 function closeSheet(){ $('#scrim').classList.remove('show'); $('#sheet').classList.remove('show');
   setTimeout(()=>{ $('#scrim').hidden=true; $('#sheet').hidden=true; $('#sheetIn').innerHTML=''; },300); draft=null; }
 function newDraft(sport){
-  const d={id:uid(),date:today(),sport:sport||'',title:'',min:null,km:null,kcal:null,fc:null,disl:null,cad:null,rpe:3,ex:[],note:''};
+  const d={id:uid(),date:today(),sport:sport||'',title:'',min:null,km:null,kcal:null,disl:null,rpe:3,ex:[],note:''};
   if(sport){ const u=usual(sport); if(u){ d.min=u.min; d.rpe=u.rpe; } }
   if(sport&&SP[sport]&&SP[sport].kind==='reps'){
     const u=usual(sport);
@@ -670,17 +659,17 @@ function editor(){
     <button data-sport="__"><span class="em">···</span>Altri</button></div></div>
   <div class="g2">
     <div class="f"><label>Data</label><input class="in" type="date" data-fld="date" value="${d.date}"></div>
-    <div class="f"><label>Durata</label><input class="in" type="text" inputmode="numeric" autocomplete="off" data-time data-fld="min" value="${fmtMin(d.min)}" placeholder="46 o 46:24"></div>
+    <div class="f"><label>Durata · min e sec</label><div class="dur">
+      <input class="in" type="number" inputmode="numeric" data-dur="m" value="${durM(d.min)}" placeholder="46">
+      <span>:</span>
+      <input class="in" type="number" inputmode="numeric" data-dur="s" value="${durS(d.min)}" placeholder="00">
+    </div></div>
   </div>
   ${kind==='cardio'? `<div class="g2">
     <div class="f"><label>Distanza · km</label><input class="in" type="text" inputmode="decimal" autocomplete="off" data-dec data-fld="km" value="${dec(d.km)}" placeholder="8,26"></div>
     <div class="f"><label>Dislivello · m</label><input class="in" type="number" inputmode="numeric" data-fld="disl" value="${d.disl??''}" placeholder="33"></div>
   </div>
-  <div class="g2">
-    <div class="f"><label>FC media · bpm</label><input class="in" type="number" inputmode="numeric" data-fld="fc" value="${d.fc??''}" placeholder="152"></div>
-    <div class="f"><label>Cadenza · spm</label><input class="in" type="number" inputmode="numeric" data-fld="cad" value="${d.cad??''}" placeholder="159"></div>
-  </div>
-  ${d.km&&d.min?`<div class="hint" style="margin:-2px 0 14px">Passo medio: <b>${pace(d.min,d.km)}</b>/km</div>`:'<div class="hint" style="margin:-2px 0 14px">Su Fitness questi dati stanno in Dettagli allenamento. Il passo lo calcola l\'app.</div>'}`:''}
+  <div class="hint" id="paceLine" style="margin:-2px 0 14px">${paceLine(d)}</div>`:''}
   ${kind==='reps'? `<div class="f"><label>Esercizi</label>
     <div id="exList">${d.ex.map(exHTML).join('')}</div>
     <button class="exadd" data-exadd>+ Aggiungi esercizio</button>
@@ -696,6 +685,7 @@ function editor(){
   ${d._new?'':`<button class="cta ghost" data-dup>Ripeti oggi questa sessione</button><button class="cta danger" data-del>Elimina</button>`}
   <div style="height:14px"></div>`}`;
 }
+function paceLine(d){ return d.km&&d.min? `Passo medio: <b>${pace(d.min,d.km)}</b>/km` : ''; }
 function exHTML(e,i){
   return `<div class="ex" data-ex="${i}">
     <div class="ex-top"><input value="${esc(e.name)}" data-exname placeholder="Nome esercizio" list="exNames"><button class="ex-del" data-exdel>✕</button></div>
@@ -734,7 +724,7 @@ function renderProf(){
   <div class="prof">
     <div class="lab">Come vengono stimate le calorie</div>
     <div class="hint">L'app stima le <b>calorie attive</b>, cioè quelle in più rispetto a stare fermo: sono quelle che vedi anche su Fitness. Parte dal tuo metabolismo a riposo e lo moltiplica per l'impegno dello sport, corretto con l'intensità. Per la corsa, la bici e la camminata entra in gioco anche la velocità.<br><br>
-    Negli sport senza distanza (calcetto, palestra, padel) se scrivi la frequenza cardiaca media la stima usa i battiti al posto dell'intensità scelta a mano. Nella corsa, nella bici e nella camminata comanda la velocità, che è più affidabile.${ok?'':'<br><br>Finché mancano sesso, età e altezza l\'app usa una formula generica, meno precisa.'}</div>
+    Nella corsa, nella bici e nella camminata l'impegno lo ricava dalla velocità; negli altri sport dall'intensità che scegli quando registri.${ok?'':'<br><br>Finché mancano sesso, età e altezza l\'app usa una formula generica, meno precisa.'}</div>
   </div>
 
   <div class="prof">
@@ -825,9 +815,17 @@ $('#fab').addEventListener('click', ()=>{ draft=newDraft(''); draft._new=true; o
 document.addEventListener('input', e=>{
   const el=e.target;
   if(el.hasAttribute('data-dec')){ const c=cleanDec(el.value); if(c!==el.value) el.value=c; }
-  if(el.hasAttribute('data-time')){ const c=cleanTime(el.value); if(c!==el.value) el.value=c; }
+  if(el.dataset.dur&&draft){
+    const mi=document.querySelector('[data-dur="m"]'), se=document.querySelector('[data-dur="s"]');
+    if(mi.value===''&&se.value==='') draft.min=null;
+    else { const m=parseInt(mi.value,10)||0, sc=Math.min(59,Math.max(0,parseInt(se.value,10)||0));
+      draft.min=Math.round((m+sc/60)*100)/100; }
+    const pl=document.querySelector('#paceLine'); if(pl) pl.innerHTML=paceLine(draft);
+    return; }
   if(el.dataset.fld&&draft){ const f=el.dataset.fld, v=el.value;
-    draft[f]= f==='min'? pmin(v) : ['km','kcal','fc','disl','cad'].includes(f)?pnum(v):v; return; }
+    draft[f]= ['km','kcal','disl'].includes(f)?pnum(v):v;
+    if(f==='km'){ const pl=document.querySelector('#paceLine'); if(pl) pl.innerHTML=paceLine(draft); }
+    return; }
   if(draft&&el.closest('[data-ex]')){
     const i=+el.closest('[data-ex]').dataset.ex, ex=draft.ex[i];
     if(el.hasAttribute('data-exname')) ex.name=el.value;

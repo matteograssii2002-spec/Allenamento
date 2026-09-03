@@ -28,7 +28,7 @@ Da lì parte a schermo intero, con la sua icona, e funziona anche offline.
 
 ## Quando modifichi qualcosa
 
-Alza il numero di `VERSION` in `sw.js` (`allenamenti-v6` → `allenamenti-v7`).
+Alza il numero di `VERSION` in `sw.js` (`allenamenti-v7` → `allenamenti-v8`).
 Serve a buttare via la cache vecchia: senza, il telefono può continuare
 a mostrarti la versione precedente.
 
