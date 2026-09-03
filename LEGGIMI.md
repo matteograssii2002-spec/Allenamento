@@ -28,7 +28,7 @@ Da lì parte a schermo intero, con la sua icona, e funziona anche offline.
 
 ## Quando modifichi qualcosa
 
-Alza il numero di `VERSION` in `sw.js` (`allenamenti-v4` → `allenamenti-v5`).
+Alza il numero di `VERSION` in `sw.js` (`allenamenti-v6` → `allenamenti-v7`).
 Serve a buttare via la cache vecchia: senza, il telefono può continuare
 a mostrarti la versione precedente.
 
@@ -41,6 +41,8 @@ pagina parte vuota. Se cancelli i dati dei siti in Safari, l'archivio se ne va.
 
 Se compili sesso, età, altezza e peso nel Profilo, l'app calcola il tuo
 metabolismo a riposo (Mifflin-St Jeor) e lo moltiplica per l'impegno dello
-sport, corretto con l'intensità. Negli allenamenti cardio in cui scrivi anche
-la frequenza cardiaca media usa la formula di Keytel, che parte dai battiti.
-Senza i dati del profilo resta la vecchia stima, basata solo sul peso.
+sport. Nella corsa, nella bici e nella camminata l'impegno viene dalla
+velocità; negli altri sport dall'intensità che scegli, o dalla frequenza
+cardiaca media se la scrivi. Il risultato sono le calorie attive, le stesse
+che mostra Fitness. Senza i dati del profilo resta la vecchia stima, basata
+solo sul peso.

@@ -121,11 +121,11 @@ header img{width:38px;height:32px;object-fit:contain;flex:none;opacity:.95}
 .row .s{display:block;font-size:12.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .row .r{font-size:11.5px;color:var(--fg3);text-align:right;flex:none;line-height:1.5}
 
-nav{flex:0 0 auto;background:var(--bg);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:40}
-.navin{max-width:520px;margin:0 auto;display:flex;align-items:center;padding:10px 12px 12px}
-.tab{flex:1;text-align:center;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--fg3);padding:9px 0}
+nav{flex:0 0 auto;background:var(--bg);border-top:1px solid var(--line);padding-bottom:max(6px,calc(env(safe-area-inset-bottom) - 13px));z-index:40}
+.navin{max-width:520px;margin:0 auto;display:flex;align-items:center;padding:5px 12px}
+.tab{flex:1;text-align:center;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--fg3);padding:8px 0}
 .tab.on{color:var(--fg)}
-.fab{width:54px;height:54px;border-radius:50%;background:var(--acc);color:#fff;font-size:28px;display:flex;align-items:center;justify-content:center;padding-bottom:3px;flex:none;margin:0 8px;box-shadow:0 8px 24px -8px rgba(255,75,18,.9);transition:transform .12s}
+.fab{width:46px;height:46px;border-radius:50%;background:var(--acc);color:#fff;font-size:25px;display:flex;align-items:center;justify-content:center;padding-bottom:3px;flex:none;margin:0 8px;box-shadow:0 6px 18px -8px rgba(255,75,18,.9);transition:transform .12s}
 .fab:active{transform:scale(.9)}
 
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;opacity:0;transition:opacity .2s}
@@ -212,7 +212,7 @@ textarea.in{min-height:78px;resize:vertical;line-height:1.5}
 .sec{display:flex;align-items:baseline;justify-content:space-between;margin:22px 2px 10px}
 .delta{font-size:12.5px;color:var(--fg2);margin-top:10px}
 .delta b{color:var(--volt);font-weight:700}
-.toast{position:fixed;left:50%;transform:translateX(-50%) translateY(16px);bottom:calc(92px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:12px 20px;border-radius:999px;font-size:13.5px;font-weight:600;z-index:60;opacity:0;transition:.22s;pointer-events:none;max-width:88vw;text-align:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%) translateY(16px);bottom:calc(74px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:12px 20px;border-radius:999px;font-size:13.5px;font-weight:600;z-index:60;opacity:0;transition:.22s;pointer-events:none;max-width:88vw;text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%)}
 @media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
 </style>
@@ -308,6 +308,15 @@ const dec = v => (v===null||v===undefined||v==='') ? '' : String(v).replace('.',
 function pnum(v){ if(v===null||v===undefined) return null;
   const t=String(v).replace(',','.').replace(/[^0-9.]/g,'');
   if(t==='') return null; const n=parseFloat(t); return isFinite(n)?n:null; }
+/* durata: accetta 46, 46,5 oppure 46:24 */
+function pmin(v){ v=String(v).trim(); if(v==='') return null;
+  if(v.includes(':')){ const [a,b]=v.split(':'); const m=parseInt(a,10)||0, sec=parseInt(b,10)||0;
+    return Math.round((m+sec/60)*100)/100; }
+  return pnum(v); }
+function fmtMin(v){ if(v===null||v===undefined||v==='') return '';
+  const m=Math.floor(v), sec=Math.round((v-m)*60);
+  return sec? m+':'+String(sec).padStart(2,'0') : String(m); }
+function cleanTime(v){ return String(v).replace(/[^0-9:,.]/g,''); }
 function cleanDec(v){ v=String(v).replace(/[^0-9.,]/g,'');
   const i=v.search(/[.,]/); if(i>=0) v=v.slice(0,i+1)+v.slice(i+1).replace(/[.,]/g,''); return v; }
 function median(a){ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y); return s[Math.floor(s.length/2)]; }
@@ -322,6 +331,12 @@ function bmr(){
 }
 /* kcal al minuto stando fermi */
 const restKcalMin = () => profOk() ? bmr()/1440 : 3.5*(S.peso||75)/200;
+/* quanto sei sopra o sotto un impegno medio, letto dai battiti */
+function hrFactor(w){
+  if(!(w.fc>0 && S.eta>0)) return null;
+  const hrmax=208-0.7*S.eta;
+  return Math.min(1.45, Math.max(0.65, (w.fc/hrmax)/0.75));
+}
 function kcal(w){
   if(w.kcal) return w.kcal;
   const s=SP[w.sport]||SP.altro; let met=s.met;
@@ -329,17 +344,12 @@ function kcal(w){
     if(w.sport==='corsa') met=Math.max(4,0.98*kmh+0.35);
     else if(w.sport==='bici') met=Math.max(3,0.40*kmh);
     else if(w.sport==='camminata') met=Math.max(2.5,0.72*kmh+1.2); }
-  if(w.rpe) met*=(0.865+w.rpe*0.045);
-  /* se hai segnato la frequenza cardiaca e il profilo e' completo, formula di
-     Keytel: parte dai battiti veri invece che dal MET medio dello sport */
-  if(w.fc>0 && w.min>0 && profOk()){
-    const kg=S.peso, hr=w.fc, et=S.eta;
-    const perMin = S.sesso==='f'
-      ? (-20.4022 + 0.4472*hr - 0.1263*kg + 0.0740*et)/4.184
-      : (-55.0969 + 0.6309*hr + 0.1988*kg + 0.2017*et)/4.184;
-    if(perMin>0.5) return Math.round(perMin*w.min);
-  }
-  return Math.round(met*restKcalMin()*(w.min||0));
+  /* dove non c'e' una distanza da cui ricavare la velocita', i battiti dicono
+     piu' dell'intensita' scelta a mano */
+  const hf = (s.kind==='cardio' && w.km>0 && w.min>0) ? null : hrFactor(w);
+  if(hf) met*=hf; else if(w.rpe) met*=(0.865+w.rpe*0.045);
+  /* attive: quello che consumi in piu' rispetto a stare fermo, come su Fitness */
+  return Math.round(Math.max(0,met-1)*restKcalMin()*(w.min||0));
 }
 const reps = w => (w.ex||[]).filter(e=>e.u!=='sec').reduce((t,e)=>t+e.sets.reduce((a,b)=>a+(+b||0),0),0);
 const secs = w => (w.ex||[]).filter(e=>e.u==='sec').reduce((t,e)=>t+e.sets.reduce((a,b)=>a+(+b||0),0),0);
@@ -398,7 +408,7 @@ function sub(w){ const s=SP[w.sport]||SP.altro, p=[];
   if(w.min) p.push(hm(w.min)); if(w.km) p.push(nf(w.km,1)+' km');
   if(s.kind==='cardio'&&w.km&&w.min) p.push(pace(w.min,w.km)+'/km');
   const r=reps(w), sc=secs(w); if(r) p.push(r+' rip'); if(sc) p.push(sc+'″');
-  if(vol(w)) p.push(nf(vol(w))+' kg'); if(w.fc) p.push(w.fc+' bpm'); if(w.disl) p.push('+'+w.disl+' m');
+  if(vol(w)) p.push(nf(vol(w))+' kg'); if(w.fc) p.push(w.fc+' bpm'); if(w.cad) p.push(w.cad+' spm'); if(w.disl) p.push('+'+w.disl+' m');
   return p.join(' · '); }
 function exStats(){
   const m={};
@@ -509,15 +519,15 @@ function renderToday(){
   </div>
 
   <div class="box flush">
-    <div class="lab">I sette giorni</div>
+    <div class="lab">I 7 giorni</div>
     <div class="week">${days.map((d,i)=>`<div class="${done.has(d)?'on':''} ${d===today()?'now':''}">
       <div class="bw"><i style="${done.has(d)?`height:${Math.max(14,Math.round((dayMin[d]||0)/mxd*40))}px`:''}"></i></div><span>${DOW[i][0].toUpperCase()}</span></div>`).join('')}</div>
   </div>
 
   <div class="box flush">
-    <div class="lab">Minuti, ultime otto settimane</div>
+    <div class="lab">Minuti, ultime 8 settimane</div>
     ${barsSVG(w8)}
-    ${li? `<div class="note">Carico di questa settimana, proiettato a domenica: ${li.pct>0?'+':''}${li.pct}% rispetto alla media delle ultime quattro. ${li.pct>50?'Stai salendo in fretta, occhio al recupero.':li.pct<-40?'Settimana leggera.':'Andatura regolare.'}</div>`:''}
+    ${li? `<div class="note">Carico di questa settimana, proiettato a domenica: ${li.pct>0?'+':''}${li.pct}% rispetto alla media delle ultime 4. ${li.pct>50?'Stai salendo in fretta, occhio al recupero.':li.pct<-40?'Settimana leggera.':'Andatura regolare.'}</div>`:''}
   </div>
 
   <div class="quad">
@@ -527,7 +537,7 @@ function renderToday(){
 
   <div class="sec"><span class="lab">Attività recenti</span>${W.length>3?`<button class="lab" data-tab="log" style="color:var(--acc)">Vedi tutte</button>`:''}</div>
   ${last.length? last.map(cardHTML).join('')
-   : `<div class="empty"><p>Si comincia.</p><span>Scegli uno sport qui sopra oppure tocca il pulsante arancione.<br>Dieci secondi e la sessione è registrata.</span></div>`}`;
+   : `<div class="empty"><p>Si comincia.</p><span>Scegli uno sport qui sopra oppure tocca il pulsante arancione.<br>10 secondi e la sessione è registrata.</span></div>`}`;
 
   if(win){ win=false; setTimeout(()=>{ const b=$('#v-today .big'); if(b) b.classList.remove('win'); },900); }
 }
@@ -603,10 +613,10 @@ function renderStats(){
       return `<div><i style="background:${s.c}"></i>${s.n}<b>${Math.round(v.min/totMin*100)}%</b></div>`}).join('')}</div>`
      : `<div class="hint" style="text-align:center">Nessun allenamento nel periodo scelto.</div>`}</div>
 
-  <div class="box flush"><div class="lab">Minuti per settimana, ultime dodici</div>${barsSVG(bars)}</div>
-  <div class="box flush"><div class="lab">Allenamenti al mese, ultimi sei</div>${lineSVG(months)}</div>
+  <div class="box flush"><div class="lab">Minuti per settimana, ultime 12</div>${barsSVG(bars)}</div>
+  <div class="box flush"><div class="lab">Allenamenti al mese, ultimi 6</div>${lineSVG(months)}</div>
   ${exBlock}
-  <div class="box"><div class="lab">Costanza, ventisei settimane</div>
+  <div class="box"><div class="lab">Costanza, 26 settimane</div>
     <div class="hm">${cells.join('')}</div>
     <div class="hmleg">meno <i style="background:var(--surf2)"></i><i style="background:var(--volt);opacity:.4"></i><i style="background:var(--volt);opacity:.7"></i><i style="background:var(--volt)"></i> più</div></div>
 
@@ -640,7 +650,7 @@ function openSheet(h){ const sh=$('#sheet'); sh.style.bottom=''; sh.style.maxHei
 function closeSheet(){ $('#scrim').classList.remove('show'); $('#sheet').classList.remove('show');
   setTimeout(()=>{ $('#scrim').hidden=true; $('#sheet').hidden=true; $('#sheetIn').innerHTML=''; },300); draft=null; }
 function newDraft(sport){
-  const d={id:uid(),date:today(),sport:sport||'',title:'',min:null,km:null,kcal:null,fc:null,disl:null,rpe:3,ex:[],note:''};
+  const d={id:uid(),date:today(),sport:sport||'',title:'',min:null,km:null,kcal:null,fc:null,disl:null,cad:null,rpe:3,ex:[],note:''};
   if(sport){ const u=usual(sport); if(u){ d.min=u.min; d.rpe=u.rpe; } }
   if(sport&&SP[sport]&&SP[sport].kind==='reps'){
     const u=usual(sport);
@@ -660,13 +670,17 @@ function editor(){
     <button data-sport="__"><span class="em">···</span>Altri</button></div></div>
   <div class="g2">
     <div class="f"><label>Data</label><input class="in" type="date" data-fld="date" value="${d.date}"></div>
-    <div class="f"><label>Durata · min</label><input class="in" type="number" inputmode="numeric" data-fld="min" value="${d.min??''}" placeholder="60"></div>
+    <div class="f"><label>Durata</label><input class="in" type="text" inputmode="numeric" autocomplete="off" data-time data-fld="min" value="${fmtMin(d.min)}" placeholder="46 o 46:24"></div>
   </div>
-  ${kind==='cardio'? `<div class="g3">
-    <div class="f"><label>Km</label><input class="in" type="text" inputmode="decimal" autocomplete="off" data-dec data-fld="km" value="${dec(d.km)}" placeholder="5,2"></div>
-    <div class="f"><label>FC media</label><input class="in" type="number" inputmode="numeric" data-fld="fc" value="${d.fc??''}" placeholder="—"></div>
-    <div class="f"><label>Disliv. m</label><input class="in" type="number" inputmode="numeric" data-fld="disl" value="${d.disl??''}" placeholder="—"></div>
-  </div>`:''}
+  ${kind==='cardio'? `<div class="g2">
+    <div class="f"><label>Distanza · km</label><input class="in" type="text" inputmode="decimal" autocomplete="off" data-dec data-fld="km" value="${dec(d.km)}" placeholder="8,26"></div>
+    <div class="f"><label>Dislivello · m</label><input class="in" type="number" inputmode="numeric" data-fld="disl" value="${d.disl??''}" placeholder="33"></div>
+  </div>
+  <div class="g2">
+    <div class="f"><label>FC media · bpm</label><input class="in" type="number" inputmode="numeric" data-fld="fc" value="${d.fc??''}" placeholder="152"></div>
+    <div class="f"><label>Cadenza · spm</label><input class="in" type="number" inputmode="numeric" data-fld="cad" value="${d.cad??''}" placeholder="159"></div>
+  </div>
+  ${d.km&&d.min?`<div class="hint" style="margin:-2px 0 14px">Passo medio: <b>${pace(d.min,d.km)}</b>/km</div>`:'<div class="hint" style="margin:-2px 0 14px">Su Fitness questi dati stanno in Dettagli allenamento. Il passo lo calcola l\'app.</div>'}`:''}
   ${kind==='reps'? `<div class="f"><label>Esercizi</label>
     <div id="exList">${d.ex.map(exHTML).join('')}</div>
     <button class="exadd" data-exadd>+ Aggiungi esercizio</button>
@@ -674,7 +688,7 @@ function editor(){
   <div class="f"><label>Intensità · ${RPE[d.rpe]||'medio'}</label>
     <div class="seg">${[1,2,3,4,5].map(i=>`<button data-rpe="${i}" class="${d.rpe==i?'on':''}">${i}</button>`).join('')}</div></div>
   <div class="g2">
-    <div class="f"><label>Calorie</label><input class="in" type="number" inputmode="numeric" data-fld="kcal" value="${d.kcal??''}" placeholder="${kcal({...d,kcal:null})} stimate"></div>
+    <div class="f"><label>Calorie attive</label><input class="in" type="number" inputmode="numeric" data-fld="kcal" value="${d.kcal??''}" placeholder="${kcal({...d,kcal:null})} stimate"></div>
     <div class="f"><label>Titolo</label><input class="in" data-fld="title" value="${esc(d.title)}" placeholder="${DEF[d.sport]||s.n}"></div>
   </div>
   <div class="f"><label>Note</label><textarea class="in" data-fld="note" placeholder="Com'è andata, con chi, cosa migliorare…">${esc(d.note)}</textarea></div>
@@ -719,8 +733,8 @@ function renderProf(){
 
   <div class="prof">
     <div class="lab">Come vengono stimate le calorie</div>
-    <div class="hint">Quando non scrivi tu le calorie di una sessione, l'app parte dal tuo metabolismo a riposo e lo moltiplica per l'impegno dello sport, corretto con l'intensità che hai indicato. Per la corsa, la bici e la camminata entra in gioco anche la velocità.<br><br>
-    Se in un allenamento cardio scrivi la frequenza cardiaca media, la stima usa direttamente i battiti: è il dato che avvicina di più al consumo reale.${ok?'':'<br><br>Finché mancano sesso, età e altezza l\'app usa una formula generica, meno precisa.'}</div>
+    <div class="hint">L'app stima le <b>calorie attive</b>, cioè quelle in più rispetto a stare fermo: sono quelle che vedi anche su Fitness. Parte dal tuo metabolismo a riposo e lo moltiplica per l'impegno dello sport, corretto con l'intensità. Per la corsa, la bici e la camminata entra in gioco anche la velocità.<br><br>
+    Negli sport senza distanza (calcetto, palestra, padel) se scrivi la frequenza cardiaca media la stima usa i battiti al posto dell'intensità scelta a mano. Nella corsa, nella bici e nella camminata comanda la velocità, che è più affidabile.${ok?'':'<br><br>Finché mancano sesso, età e altezza l\'app usa una formula generica, meno precisa.'}</div>
   </div>
 
   <div class="prof">
@@ -811,8 +825,9 @@ $('#fab').addEventListener('click', ()=>{ draft=newDraft(''); draft._new=true; o
 document.addEventListener('input', e=>{
   const el=e.target;
   if(el.hasAttribute('data-dec')){ const c=cleanDec(el.value); if(c!==el.value) el.value=c; }
+  if(el.hasAttribute('data-time')){ const c=cleanTime(el.value); if(c!==el.value) el.value=c; }
   if(el.dataset.fld&&draft){ const f=el.dataset.fld, v=el.value;
-    draft[f]=['min','km','kcal','fc','disl'].includes(f)?pnum(v):v; return; }
+    draft[f]= f==='min'? pmin(v) : ['km','kcal','fc','disl','cad'].includes(f)?pnum(v):v; return; }
   if(draft&&el.closest('[data-ex]')){
     const i=+el.closest('[data-ex]').dataset.ex, ex=draft.ex[i];
     if(el.hasAttribute('data-exname')) ex.name=el.value;
